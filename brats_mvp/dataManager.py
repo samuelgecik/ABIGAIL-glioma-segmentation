@@ -39,7 +39,7 @@ def build_train_pairs(train_dir: str, df: pd.DataFrame) -> List[Tuple[str, str]]
     return _build_pairs(subject_ids, train_dir)
 
 
-def get_training_data():
+def get_training_data(val_split=0.2):
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"CSV not found at {CSV_PATH}")
 
@@ -57,20 +57,35 @@ def get_training_data():
 
     train_df = df[df[split_col].astype(str).str.strip().eq("Train")]
 
-    train_pairs = build_train_pairs(TRAIN_DIR, train_df)
-    if not train_pairs:
+    all_train_pairs = build_train_pairs(TRAIN_DIR, train_df)
+    if not all_train_pairs:
         raise RuntimeError("No training pairs found. Check paths and filenames.")
 
-    dataset = BraTS2DAxialDataset(train_pairs)
-    loader = DataLoader(dataset, batch_size=16, shuffle=True, num_workers=2, pin_memory=torch.cuda.is_available())
+    # Split at PATIENT level (not slice level)
+    import random
+    random.seed(42)  # For reproducibility
+    random.shuffle(all_train_pairs)  # Shuffle patients/volumes
+    
+    split_idx = int(len(all_train_pairs) * (1 - val_split))
+    train_pairs = all_train_pairs[:split_idx]
+    val_pairs = all_train_pairs[split_idx:]
+
+    # Now create datasets - each will expand volumes into slices
+    train_dataset = BraTS2DAxialDataset(train_pairs)
+    val_dataset = BraTS2DAxialDataset(val_pairs)
+    
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=2, pin_memory=torch.cuda.is_available())
+    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=2, pin_memory=torch.cuda.is_available())
 
     # Verification step: fetch one batch
-    batch = next(iter(loader))
+    batch = next(iter(train_loader))
     images, labels = batch
     print("Batch images shape:", images.shape)  # [B,1,H,W]
     print("Batch labels shape:", labels.shape)  # [B,1,H,W]
     print("Images dtype:", images.dtype, "Labels dtype:", labels.dtype)
-    return loader
+    print(f"Train volumes: {len(train_pairs)}, Validation volumes: {len(val_pairs)}")
+    print(f"Train slices: {len(train_dataset)}, Validation slices: {len(val_dataset)}")
+    return train_loader, val_loader
 
 
 def get_validation_data():
