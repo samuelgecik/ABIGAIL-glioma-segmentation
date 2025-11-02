@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from brats_mvp.dataManager import get_training_data
+from torchmetrics import MetricCollection
+from torchmetrics.classification import BinaryDice, BinaryJaccardIndex, BinaryPrecision, BinaryRecall
 
 
 def _prepare_batch(
@@ -41,11 +43,29 @@ def main():
     loss_function = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
+    metric_names = ("dice", "iou", "precision", "recall")
+
+    def build_metrics() -> MetricCollection:
+        collection = MetricCollection(
+            {
+                "dice": BinaryDice(),
+                "iou": BinaryJaccardIndex(),
+                "precision": BinaryPrecision(),
+                "recall": BinaryRecall(),
+            }
+        )
+        return collection.to(device)
+
+    train_metrics = build_metrics()
+    val_metrics = build_metrics()
+
     epochs = 2
 
     for epoch in range(1, epochs + 1):
         model.train()
         training_loss = 0.0
+        train_metrics.reset()
+        train_batches = 0
 
         train_pbar = tqdm(training_loader, desc=f"Epoch {epoch}/{epochs} [Train]", unit="batch")
         for images, labels in train_pbar:
@@ -60,12 +80,26 @@ def main():
             optimizer.step()
 
             training_loss += loss.item()
-            train_pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+            train_batches += 1
+
+            probs = torch.sigmoid(predictions.detach())
+            targets = labels.detach().bool()
+            train_metrics.update(probs, targets)
+
+            current_dice = train_metrics.compute()["dice"].item()
+            train_pbar.set_postfix({"loss": f"{loss.item():.4f}", "dice": f"{current_dice:.4f}"})
 
         train_loss = training_loss / max(1, len(training_loader))
+        epoch_train_metrics = (
+            {name: train_metrics.compute()[name].item() for name in metric_names}
+            if train_batches
+            else {name: float("nan") for name in metric_names}
+        )
 
         model.eval()
         val_loss = 0.0
+        val_metrics.reset()
+        val_batches = 0
 
         val_pbar = tqdm(validation_loader, desc=f"Epoch {epoch}/{epochs} [Val]  ", unit="batch")
         with torch.no_grad():
@@ -76,10 +110,33 @@ def main():
                 predictions = model(images)
                 loss = loss_function(predictions, labels)
                 val_loss += loss.item()
-                val_pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+                val_batches += 1
+
+                probs = torch.sigmoid(predictions)
+                targets = labels.bool()
+                val_metrics.update(probs, targets)
+
+                current_dice = val_metrics.compute()["dice"].item()
+                val_pbar.set_postfix({"loss": f"{loss.item():.4f}", "dice": f"{current_dice:.4f}"})
         val_loss /= max(1, len(validation_loader))
 
-        print(f"[{epoch:02d}] train_bce={train_loss:.4f} | val_bce={val_loss:.4f}")
+        epoch_val_metrics = (
+            {name: val_metrics.compute()[name].item() for name in metric_names}
+            if val_batches
+            else {name: float("nan") for name in metric_names}
+        )
+
+        train_metric_str = " ".join(
+            f"train_{name}={epoch_train_metrics[name]:.4f}" for name in metric_names
+        )
+        val_metric_str = " ".join(
+            f"val_{name}={epoch_val_metrics[name]:.4f}" for name in metric_names
+        )
+
+        print(
+            f"[{epoch:02d}] train_bce={train_loss:.4f} | val_bce={val_loss:.4f} | "
+            f"{train_metric_str} | {val_metric_str}"
+        )
 
 
 if __name__ == "__main__":
