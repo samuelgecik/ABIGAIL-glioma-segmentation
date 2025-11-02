@@ -39,7 +39,7 @@ def main():
 
     training_loader, validation_loader = get_training_data(val_split=0.2)
     loss_function = nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     epochs = 2
 
