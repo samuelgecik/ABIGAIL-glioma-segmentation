@@ -123,3 +123,6 @@ Thumbs.db
 
 training_data1_v2/
 training_data1_v2_filtered/
+validation_data/
+outputs/
+scripts/
