@@ -10,7 +10,7 @@ from brats_mvp.dataset import BraTS2DDataset
 
 # Constants
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-TRAIN_DIR = os.path.join(REPO_ROOT, "training_data1_v2")
+TRAIN_DIR = os.path.join("~/nas_storage_synology/BraTS/training_data1_v2_filtered_t2f")
 VALIDATION_DIR = os.path.join(REPO_ROOT, "validation_data")
 CSV_PATH = os.path.join(REPO_ROOT, "validated_filtered.csv")
 
