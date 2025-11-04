@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from brats_mvp.dataset import BraTS2DAxialDataset
+from brats_mvp.dataset import BraTS2DDataset
 
 
 # Constants
@@ -57,7 +57,7 @@ def main():
     if not train_pairs:
         raise RuntimeError("No training pairs found. Check paths and filenames.")
 
-    dataset = BraTS2DAxialDataset(train_pairs)
+    dataset = BraTS2DDataset(train_pairs)
     loader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=2, pin_memory=torch.cuda.is_available())
 
     # Verification step: fetch one batch

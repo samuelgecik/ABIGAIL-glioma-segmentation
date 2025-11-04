@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from brats_mvp.dataset import BraTS2DAxialDataset
+from brats_mvp.dataset import BraTS2DDataset
 
 
 # Constants
@@ -39,7 +39,7 @@ def build_train_pairs(train_dir: str, df: pd.DataFrame) -> List[Tuple[str, str]]
     return _build_pairs(subject_ids, train_dir)
 
 
-def get_training_data(val_split=0.2):
+def get_training_data(val_split=0.2, orientation="axial"):
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"CSV not found at {CSV_PATH}")
 
@@ -71,8 +71,8 @@ def get_training_data(val_split=0.2):
     val_pairs = all_train_pairs[split_idx:]
 
     # Now create datasets - each will expand volumes into slices
-    train_dataset = BraTS2DAxialDataset(train_pairs)
-    val_dataset = BraTS2DAxialDataset(val_pairs)
+    train_dataset = BraTS2DDataset(train_pairs, orientation=orientation)
+    val_dataset = BraTS2DDataset(val_pairs, orientation=orientation)
     
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=2, pin_memory=torch.cuda.is_available())
     val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=2, pin_memory=torch.cuda.is_available())
@@ -88,7 +88,7 @@ def get_training_data(val_split=0.2):
     return train_loader, val_loader
 
 
-def get_validation_data():
+def get_validation_data(orientation="axial"):
     if not os.path.isdir(VALIDATION_DIR):
         raise FileNotFoundError(f"Validation directory not found at {VALIDATION_DIR}")
 
@@ -97,7 +97,7 @@ def get_validation_data():
     if not validation_pairs:
         raise RuntimeError("No validation pairs found. Check validation data paths and filenames.")
 
-    dataset = BraTS2DAxialDataset(validation_pairs)
+    dataset = BraTS2DDataset(validation_pairs, orientation=orientation)
     loader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=2, pin_memory=torch.cuda.is_available())
     return loader
 
