@@ -1,1 +1,1 @@
-# Make brats_mvp a package
+# Make src a package

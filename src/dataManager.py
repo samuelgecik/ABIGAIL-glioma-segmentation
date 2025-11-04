@@ -5,7 +5,7 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from brats_mvp.dataset import BraTS2DDataset
+from src.dataset import BraTS2DDataset
 
 
 # Constants

@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from brats_mvp.utils import binarize_mask
+from src.utils import binarize_mask
 
 
 class BraTS2DDataset(Dataset):
