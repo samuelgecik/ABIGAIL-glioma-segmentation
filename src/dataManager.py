@@ -10,7 +10,7 @@ from src.dataset import BraTS2DDataset
 
 # Constants
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-TRAIN_DIR = "~/nas_storage_synology/BraTS/training_data1_v2_filtered_t2f/training_data1_v2_filtered_t2f"
+TRAIN_DIR = "~/nas_storage_synology/BraTS/training_data1_v2_filtered_t2f/training_data1_v2_filtered"
 VALIDATION_DIR = os.path.join(REPO_ROOT, "validation_data")
 CSV_PATH = os.path.join(REPO_ROOT, "validated_filtered.csv")
 
