@@ -59,7 +59,7 @@ def get_training_data(val_split=0.2, orientation="axial"):
 
     all_train_pairs = build_train_pairs(TRAIN_DIR, train_df)
     if not all_train_pairs:
-        raise RuntimeError("No training pairs found. Check paths and filenames.")
+        raise RuntimeError(f"No training pairs found. Check paths and filenames. {TRAIN_DIR}")
 
     # Split at PATIENT level (not slice level)
     import random
