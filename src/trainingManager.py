@@ -36,7 +36,7 @@ def main():
     loss_function = nn.BCEWithLogitsLoss()
     metric_names = ("iou", "precision", "recall")
     summary = []
-    epochs = 2
+    epochs = 20
     
     # Create directories for saving models and logs
     run_dir = Path("training_logs")
