@@ -12,6 +12,37 @@ from torchmetrics import MetricCollection
 from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, BinaryRecall
 
 
+def calculate_pos_weight(data_loader, device, sample_batches=50):
+    """
+    Calculate positive weight for BCEWithLogitsLoss based on class distribution.
+    Samples a subset of batches to estimate the ratio.
+    
+    Returns:
+        pos_weight: Tensor with weight for positive class
+    """
+    print("Calculating class distribution for loss weighting...")
+    total_positive = 0
+    total_negative = 0
+    
+    for i, (_, labels) in enumerate(data_loader):
+        if i >= sample_batches:
+            break
+        labels = labels.to(device)
+        total_positive += labels.sum().item()
+        total_negative += (1 - labels).sum().item()
+    
+    if total_positive == 0:
+        print("WARNING: No positive samples found in subset!")
+        return torch.tensor([1.0]).to(device)
+    
+    pos_weight_value = total_negative / total_positive
+    print(f"  Positive pixels: {total_positive:,.0f}")
+    print(f"  Negative pixels: {total_negative:,.0f}")
+    print(f"  Calculated pos_weight: {pos_weight_value:.2f}")
+    
+    return torch.tensor([pos_weight_value]).to(device)
+
+
 def _prepare_batch(
     images: torch.Tensor,
     labels: torch.Tensor,
@@ -33,7 +64,8 @@ def _prepare_batch(
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    loss_function = nn.BCEWithLogitsLoss()
+    print(f"Using device: {device}")
+    
     metric_names = ("iou", "precision", "recall")
     summary = []
     epochs = 20
@@ -57,6 +89,16 @@ def main():
 
     log_records = []
     for orientation in ("axial", "coronal", "sagittal"):
+        print(f"\n{'='*60}")
+        print(f"Training orientation: {orientation.upper()}")
+        print(f"{'='*60}")
+        
+        # Load data first to calculate pos_weight
+        training_loader, validation_loader = get_training_data(val_split=0.2, orientation=orientation)
+        
+        pos_weight = calculate_pos_weight(training_loader, device, sample_batches=50)
+        loss_function_oriented = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        
         model = torch.hub.load(
             "mateuszbuda/brain-segmentation-pytorch",
             "unet",
@@ -65,10 +107,16 @@ def main():
             init_features=32,
             pretrained=True,
         ).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+        
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+        
+        # ReduceLROnPlateau will lower LR when validation loss plateaus
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.5, patience=3, min_lr=1e-6
+        )
+        
         train_metrics = build_metrics()
         val_metrics = build_metrics()
-        training_loader, validation_loader = get_training_data(val_split=0.2, orientation=orientation)
         final_val_loss = float("nan")
         final_val_metrics = {name: float("nan") for name in metric_names}
         best_val_iou = 0.0
@@ -85,16 +133,27 @@ def main():
                 labels = labels.to(device)
                 optimizer.zero_grad(set_to_none=True)
                 predictions = model(images)
-                loss = loss_function(predictions, labels)
+                loss = loss_function_oriented(predictions, labels)
                 loss.backward()
+                
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                
                 optimizer.step()
                 training_loss += loss.item()
                 train_batches += 1
                 probs = torch.sigmoid(predictions.detach())
                 targets = labels.detach().bool()
                 train_metrics.update(probs, targets)
-                current_iou = train_metrics.compute()["iou"].item()
-                train_pbar.set_postfix({"loss": f"{loss.item():.4f}", "iou": f"{current_iou:.4f}"})
+                
+                if train_batches % 100 == 0:  # Show metrics every 100 batches
+                    current_metrics = train_metrics.compute()
+                    train_pbar.set_postfix({
+                        "loss": f"{loss.item():.4f}", 
+                        "iou": f"{current_metrics['iou'].item():.4f}"
+                    })
+                else:
+                    train_pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+                    
             train_loss = training_loss / max(1, len(training_loader))
             epoch_train_metrics = (
                 {name: train_metrics.compute()[name].item() for name in metric_names}
@@ -113,14 +172,22 @@ def main():
                     images = images.to(device)
                     labels = labels.to(device)
                     predictions = model(images)
-                    loss = loss_function(predictions, labels)
+                    loss = loss_function_oriented(predictions, labels)
                     val_loss += loss.item()
                     val_batches += 1
                     probs = torch.sigmoid(predictions)
                     targets = labels.bool()
                     val_metrics.update(probs, targets)
-                    current_iou = val_metrics.compute()["iou"].item()
-                    val_pbar.set_postfix({"loss": f"{loss.item():.4f}", "iou": f"{current_iou:.4f}"})
+                    
+                    if val_batches % 100 == 0:
+                        current_metrics = val_metrics.compute()
+                        val_pbar.set_postfix({
+                            "loss": f"{loss.item():.4f}", 
+                            "iou": f"{current_metrics['iou'].item():.4f}"
+                        })
+                    else:
+                        val_pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+                        
             val_loss /= max(1, len(validation_loader))
             epoch_val_metrics = (
                 {name: val_metrics.compute()[name].item() for name in metric_names}
@@ -129,6 +196,12 @@ def main():
             )
             final_val_loss = val_loss
             final_val_metrics = epoch_val_metrics
+            
+            old_lr = optimizer.param_groups[0]['lr']
+            scheduler.step(val_loss)
+            new_lr = optimizer.param_groups[0]['lr']
+            if new_lr != old_lr:
+                print(f"  → Learning rate reduced: {old_lr:.6f} → {new_lr:.6f}")
 
             # Save model if it has the best validation IoU so far
             current_val_iou = epoch_val_metrics.get("iou", 0.0)
@@ -139,6 +212,7 @@ def main():
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
                     'val_loss': val_loss,
                     'val_iou': current_val_iou,
                     'val_metrics': epoch_val_metrics,
@@ -151,8 +225,9 @@ def main():
             val_metric_str = " ".join(
                 f"val_{name}={epoch_val_metrics[name]:.4f}" for name in metric_names
             )
+            current_lr = optimizer.param_groups[0]['lr']
             print(
-                f"{orientation} [{epoch:02d}] train_bce={train_loss:.4f} | val_bce={val_loss:.4f} | "
+                f"{orientation} [{epoch:02d}] LR={current_lr:.6f} | train_bce={train_loss:.4f} | val_bce={val_loss:.4f} | "
                 f"{train_metric_str} | {val_metric_str}"
             )
             log_records.append(

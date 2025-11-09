@@ -10,7 +10,7 @@ from src.dataset import BraTS2DDataset
 
 # Constants
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-TRAIN_DIR = os.path.abspath("/home/sg624ew/nas_storage_synology/BraTS/filtered_dataset")
+TRAIN_DIR = os.path.abspath("/home/sg624ew/glioma_data/filtered_dataset")  # Local SSD copy for faster I/O
 VALIDATION_DIR = os.path.join(REPO_ROOT, "validation_data")
 CSV_PATH = os.path.join(REPO_ROOT, "validated_filtered.csv")
 
@@ -74,8 +74,10 @@ def get_training_data(val_split=0.2, orientation="axial"):
     train_dataset = BraTS2DDataset(train_pairs, orientation=orientation)
     val_dataset = BraTS2DDataset(val_pairs, orientation=orientation)
     
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=2, pin_memory=torch.cuda.is_available())
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=2, pin_memory=torch.cuda.is_available())
+    # Use num_workers=0 (main process only) since data is preloaded in RAM
+    # Larger batch size to maximize GPU utilization with 24GB VRAM
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=0, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=0, pin_memory=True)
 
     # Verification step: fetch one batch
     batch = next(iter(train_loader))
@@ -98,7 +100,7 @@ def get_validation_data(orientation="axial"):
         raise RuntimeError("No validation pairs found. Check validation data paths and filenames.")
 
     dataset = BraTS2DDataset(validation_pairs, orientation=orientation)
-    loader = DataLoader(dataset, batch_size=16, shuffle=False, num_workers=2, pin_memory=torch.cuda.is_available())
+    loader = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=0, pin_memory=True)
     return loader
 
 
