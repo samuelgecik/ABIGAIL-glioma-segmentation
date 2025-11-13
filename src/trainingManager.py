@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from src.dataManager import get_training_data
+from src.model import UNet
 from torchmetrics import MetricCollection
 from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, BinaryRecall
 
@@ -47,10 +48,7 @@ def _prepare_batch(
     images: torch.Tensor,
     labels: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Match hub U-Net expectations (3 channels, spatial dims divisible by 16)."""
-    if images.size(1) != 3:
-        images = images.repeat(1, 3, 1, 1)
-
+    """Pad spatial dimensions to be divisible by 16 for U-Net."""
     _, _, height, width = images.shape
     pad_h = (16 - height % 16) % 16
     pad_w = (16 - width % 16) % 16
@@ -99,14 +97,7 @@ def main():
         pos_weight = calculate_pos_weight(training_loader, device, sample_batches=50)
         loss_function_oriented = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
         
-        model = torch.hub.load(
-            "mateuszbuda/brain-segmentation-pytorch",
-            "unet",
-            in_channels=3,
-            out_channels=1,
-            init_features=32,
-            pretrained=True,
-        ).to(device)
+        model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)
         
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
         
