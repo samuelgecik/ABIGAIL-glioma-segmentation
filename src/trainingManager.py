@@ -60,6 +60,12 @@ def _prepare_batch(
     return images, labels
 
 
+def _write_logs(log_path: Path, records: list[dict]) -> None:
+    """Persist log records after each update so progress is not lost."""
+    with log_path.open("w", encoding="utf-8") as fp:
+        json.dump(records, fp, indent=2)
+
+
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -74,6 +80,7 @@ def main():
     model_dir = Path("saved_models")
     model_dir.mkdir(exist_ok=True)
     timestamp = time.strftime("%Y%m%d-%H%M%S")
+    log_path = run_dir / f"three_axis_run_{timestamp}.json"
 
     def build_metrics() -> MetricCollection:
         collection = MetricCollection(
@@ -85,7 +92,7 @@ def main():
         )
         return collection.to(device)
 
-    log_records = []
+    log_records: list[dict] = []
     for orientation in ("axial", "coronal", "sagittal"):
         print(f"\n{'='*60}")
         print(f"Training orientation: {orientation.upper()}")
@@ -231,6 +238,7 @@ def main():
                     "val_metrics": epoch_val_metrics,
                 }
             )
+            _write_logs(log_path, log_records)
 
         summary.append((orientation, final_val_loss, final_val_metrics))
         print(f"  → Best IoU for {orientation}: {best_val_iou:.4f}")
@@ -251,10 +259,10 @@ def main():
                 "val_metrics": avg_metrics,
             }
         )
+        _write_logs(log_path, log_records)
+    elif log_records:
+        _write_logs(log_path, log_records)
 
-    log_path = run_dir / f"three_axis_run_{timestamp}.json"
-    with log_path.open("w", encoding="utf-8") as fp:
-        json.dump(log_records, fp, indent=2)
     print(f"Saved log to {log_path}")
 
 
