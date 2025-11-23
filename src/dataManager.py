@@ -11,7 +11,6 @@ from src.dataset import BraTS2DDataset
 # Constants
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 TRAIN_DIR = os.path.abspath("/home/sg624ew/glioma_data/filtered_dataset")  # Local SSD copy for faster I/O
-VALIDATION_DIR = os.path.join(REPO_ROOT, "validation_data")
 CSV_PATH = os.path.join(REPO_ROOT, "validated_filtered.csv")
 
 
@@ -39,7 +38,7 @@ def build_train_pairs(train_dir: str, df: pd.DataFrame) -> List[Tuple[str, str]]
     return _build_pairs(subject_ids, train_dir)
 
 
-def get_training_data(val_split=0.2, orientation="axial"):
+def get_training_data(val_split=0.2, orientation="axial", preload=True):
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(f"CSV not found at {CSV_PATH}")
 
@@ -71,8 +70,8 @@ def get_training_data(val_split=0.2, orientation="axial"):
     val_pairs = all_train_pairs[split_idx:]
 
     # Now create datasets - each will expand volumes into slices
-    train_dataset = BraTS2DDataset(train_pairs, orientation=orientation)
-    val_dataset = BraTS2DDataset(val_pairs, orientation=orientation)
+    train_dataset = BraTS2DDataset(train_pairs, orientation=orientation, preload=preload)
+    val_dataset = BraTS2DDataset(val_pairs, orientation=orientation, preload=preload)
     
     # Use num_workers=0 (main process only) since data is preloaded in RAM
     # Larger batch size to maximize GPU utilization with 24GB VRAM
@@ -88,20 +87,6 @@ def get_training_data(val_split=0.2, orientation="axial"):
     print(f"Train volumes: {len(train_pairs)}, Validation volumes: {len(val_pairs)}")
     print(f"Train slices: {len(train_dataset)}, Validation slices: {len(val_dataset)}")
     return train_loader, val_loader
-
-
-def get_validation_data(orientation="axial"):
-    if not os.path.isdir(VALIDATION_DIR):
-        raise FileNotFoundError(f"Validation directory not found at {VALIDATION_DIR}")
-
-    subject_ids = [d for d in os.listdir(VALIDATION_DIR) if os.path.isdir(os.path.join(VALIDATION_DIR, d))]
-    validation_pairs = _build_pairs(subject_ids, VALIDATION_DIR)
-    if not validation_pairs:
-        raise RuntimeError("No validation pairs found. Check validation data paths and filenames.")
-
-    dataset = BraTS2DDataset(validation_pairs, orientation=orientation)
-    loader = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=0, pin_memory=True)
-    return loader
 
 
 if __name__ == "__main__":

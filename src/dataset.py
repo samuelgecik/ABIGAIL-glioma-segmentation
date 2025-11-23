@@ -9,6 +9,11 @@ from torch.utils.data import Dataset
 from src.utils import binarize_mask
 
 
+# Global cache to store raw volumes (canonical orientation)
+# Key: file_path, Value: numpy array
+_volume_cache: Dict[str, np.ndarray] = {}
+
+
 class BraTS2DDataset(Dataset):
     """
     Turn a list of (image_path, label_path) 3D NIfTI volumes into per-slice 2D samples.
@@ -42,8 +47,24 @@ class BraTS2DDataset(Dataset):
 
             if preload:
                 # Load volume immediately
-                img_vol = np.moveaxis(nib.load(img_path).get_fdata(dtype=np.float32), self.slice_axis, 0)
-                lbl_vol = np.moveaxis(nib.load(lbl_path).get_fdata(dtype=np.float32), self.slice_axis, 0).astype(np.int16)
+                # Check cache for image
+                if img_path in _volume_cache:
+                    img_raw = _volume_cache[img_path]
+                else:
+                    img_raw = nib.load(img_path).get_fdata(dtype=np.float32)
+                    _volume_cache[img_path] = img_raw
+                
+                # Check cache for label
+                if lbl_path in _volume_cache:
+                    lbl_raw = _volume_cache[lbl_path]
+                else:
+                    # Load as float32 then cast to int16 to match original logic but store compact
+                    lbl_raw = nib.load(lbl_path).get_fdata(dtype=np.float32).astype(np.int16)
+                    _volume_cache[lbl_path] = lbl_raw
+
+                # Create views for the specific orientation
+                img_vol = np.moveaxis(img_raw, self.slice_axis, 0)
+                lbl_vol = np.moveaxis(lbl_raw, self.slice_axis, 0)
                 
                 if img_vol.shape != lbl_vol.shape:
                     raise ValueError(
