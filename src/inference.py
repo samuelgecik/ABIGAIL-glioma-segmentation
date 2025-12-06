@@ -10,7 +10,7 @@ from torchmetrics import MetricCollection
 from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, BinaryRecall, BinaryF1Score
 
 from src.dataManager import get_training_data
-from src.model import UNet
+from src.model import UNet, DeepLabV3
 
 
 def _prepare_batch(
@@ -28,15 +28,24 @@ def _prepare_batch(
     return images, labels
 
 
-def load_model_checkpoint(checkpoint_path: Path, device: torch.device) -> UNet:
+def load_model_checkpoint(checkpoint_path: Path, device: torch.device):
     """Load a trained model from checkpoint."""
-    model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)
-    
+    # Load checkpoint to check model architecture
     checkpoint = torch.load(checkpoint_path, map_location=device)
+    
+    # Determine model architecture (default to UNet for backwards compatibility)
+    model_arch = checkpoint.get('model_arch', 'unet')
+    
+    # Initialize the appropriate model
+    if model_arch == 'deeplabv3':
+        model = DeepLabV3(in_channels=1, out_classes=1).to(device)
+    else:
+        model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)
+    
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     
-    print(f"Loaded checkpoint from {checkpoint_path}")
+    print(f"Loaded {model_arch.upper()} checkpoint from {checkpoint_path}")
     print(f"  Epoch: {checkpoint['epoch']}")
     print(f"  Val Loss: {checkpoint['val_loss']:.4f}")
     print(f"  Val IoU: {checkpoint['val_iou']:.4f}")
@@ -45,7 +54,7 @@ def load_model_checkpoint(checkpoint_path: Path, device: torch.device) -> UNet:
 
 
 def evaluate_model(
-    model: UNet,
+    model,
     validation_loader,
     device: torch.device,
     orientation: str

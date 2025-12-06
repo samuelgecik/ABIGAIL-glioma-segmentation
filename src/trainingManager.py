@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from src.dataManager import get_training_data
-from src.model import UNet
+from src.model import UNet, DeepLabV3
 from torchmetrics import MetricCollection
 from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, BinaryRecall
 
@@ -70,6 +70,9 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
+    # Model architecture selection: 'unet' or 'deeplabv3'
+    model_arch = 'deeplabv3'
+    
     metric_names = ("iou", "precision", "recall")
     summary = []
     epochs = 20
@@ -104,7 +107,13 @@ def main():
         pos_weight = calculate_pos_weight(training_loader, device, sample_batches=50)
         loss_function_oriented = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
         
-        model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)
+        # Select model architecture
+        if model_arch == 'deeplabv3':
+            print(f"Training {orientation} orientation with DeepLab v3")
+            model = DeepLabV3(in_channels=1, out_classes=1).to(device)
+        else:
+            print(f"Training {orientation} orientation with UNet")
+            model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)
         
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
         
@@ -205,7 +214,7 @@ def main():
             current_val_iou = epoch_val_metrics.get("iou", 0.0)
             if current_val_iou > best_val_iou:
                 best_val_iou = current_val_iou
-                model_path = model_dir / f"best_{orientation}_{timestamp}.pt"
+                model_path = model_dir / f"best_{model_arch}_{orientation}_{timestamp}.pt"
                 torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
@@ -214,6 +223,7 @@ def main():
                     'val_loss': val_loss,
                     'val_iou': current_val_iou,
                     'val_metrics': epoch_val_metrics,
+                    'model_arch': model_arch,
                 }, model_path)
                 print(f"  → Saved best model for {orientation} (IoU: {current_val_iou:.4f}) to {model_path}")
 
