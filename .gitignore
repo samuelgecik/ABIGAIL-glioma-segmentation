@@ -127,3 +127,7 @@ training_data1_v2_filtered/
 validation_data/
 scripts/
 data/
+outputs/
+saved_models/
+training_logs/
+visualization/
