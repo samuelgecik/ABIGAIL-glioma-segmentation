@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from src.model import UNet, DeepLabV3
+from src.model import UNet, DeepLabV3, NestedUNet
 
 
 def load_and_prepare_volume(
@@ -162,6 +162,8 @@ def predict_single_case(
     
     if model_arch == 'deeplabv3':
         model = DeepLabV3(in_channels=1, out_classes=1).to(device)
+    elif model_arch == 'nestedunet':
+        model = NestedUNet(in_ch=1, out_ch=1).to(device)
     else:
         model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)
     

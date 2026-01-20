@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from src.dataManager import get_training_data
-from src.model import UNet, DeepLabV3
+from src.model import UNet, DeepLabV3, NestedUNet
 from torchmetrics import MetricCollection
 from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, BinaryRecall
 
@@ -70,8 +70,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    # Model architecture selection: 'unet' or 'deeplabv3'
-    model_arch = 'deeplabv3'
+    # Model architecture selection: 'unet' or 'deeplabv3' or 'nestedunet'
+    model_arch = 'nestedunet'
     
     metric_names = ("iou", "precision", "recall")
     summary = []
@@ -111,6 +111,9 @@ def main():
         if model_arch == 'deeplabv3':
             print(f"Training {orientation} orientation with DeepLab v3")
             model = DeepLabV3(in_channels=1, out_classes=1).to(device)
+        elif model_arch == 'nestedunet':
+            print(f"Training {orientation} orientation with NestedUNet")
+            model = NestedUNet(in_ch=1, out_ch=1).to(device)
         else:
             print(f"Training {orientation} orientation with UNet")
             model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)

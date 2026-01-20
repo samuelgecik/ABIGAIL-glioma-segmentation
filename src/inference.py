@@ -10,7 +10,7 @@ from torchmetrics import MetricCollection
 from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, BinaryRecall, BinaryF1Score
 
 from src.dataManager import get_training_data
-from src.model import UNet, DeepLabV3
+from src.model import UNet, DeepLabV3, NestedUNet
 
 
 def _prepare_batch(
@@ -39,6 +39,8 @@ def load_model_checkpoint(checkpoint_path: Path, device: torch.device):
     # Initialize the appropriate model
     if model_arch == 'deeplabv3':
         model = DeepLabV3(in_channels=1, out_classes=1).to(device)
+    elif model_arch == 'nestedunet':
+        model = NestedUNet(in_ch=1, out_ch=1).to(device)
     else:
         model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)
     

@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.models import segmentation
+from src.unet_nested import NestedUNet
 
 class DeepLabV3(nn.Module):
     def __init__(self, in_channels=1, out_classes=1):
@@ -14,8 +16,8 @@ class DeepLabV3(nn.Module):
         """
         super(DeepLabV3, self).__init__()
         
-        # Load DeepLab v3 with ResNet-101 from torch hub (not pretrained)
-        self.model = torch.hub.load('pytorch/vision:v0.10.0', 'deeplabv3_resnet101', pretrained=False)
+        # Load DeepLab v3 with ResNet-101 from torchvision
+        self.model = segmentation.deeplabv3_resnet101(weights=None)
         
         # Modify the first conv layer to accept single-channel input if needed
         if in_channels != 3:
@@ -36,8 +38,8 @@ class DeepLabV3(nn.Module):
         # DeepLab v3 has a classifier with a final conv layer
         self.model.classifier[4] = nn.Conv2d(256, out_classes, kernel_size=1)
         
-        # Also modify the auxiliary classifier if it exists
-        if hasattr(self.model, 'aux_classifier'):
+        # Also modify the auxiliary classifier if it exists and is not None
+        if hasattr(self.model, 'aux_classifier') and self.model.aux_classifier is not None:
             self.model.aux_classifier[4] = nn.Conv2d(256, out_classes, kernel_size=1)
     
     def forward(self, x):
