@@ -1,6 +1,65 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.models import segmentation
+from src.unet_nested import NestedUNet
+
+class DeepLabV3(nn.Module):
+    def __init__(self, in_channels=1, out_classes=1):
+        """
+        DeepLab v3 with ResNet-101 backbone from torch hub.
+        Adapted for single-channel input and custom number of output classes.
+        
+        Args:
+            in_channels: Number of input channels (default: 1 for grayscale)
+            out_classes: Number of output classes (default: 1 for binary segmentation)
+        """
+        super(DeepLabV3, self).__init__()
+        
+        # Load DeepLab v3 with ResNet-101 from torchvision
+        self.model = segmentation.deeplabv3_resnet101(weights=None)
+        
+        # Modify the first conv layer to accept single-channel input if needed
+        if in_channels != 3:
+            # Get the original first conv layer
+            original_conv1 = self.model.backbone.conv1
+            # Create new conv1 with desired input channels
+            # Keep same out_channels, kernel_size, stride, padding, bias as original
+            self.model.backbone.conv1 = nn.Conv2d(
+                in_channels, 
+                original_conv1.out_channels,
+                kernel_size=original_conv1.kernel_size,
+                stride=original_conv1.stride,
+                padding=original_conv1.padding,
+                bias=original_conv1.bias is not None
+            )
+        
+        # Modify the classifier to output the desired number of classes
+        # DeepLab v3 has a classifier with a final conv layer
+        self.model.classifier[4] = nn.Conv2d(256, out_classes, kernel_size=1)
+        
+        # Also modify the auxiliary classifier if it exists and is not None
+        if hasattr(self.model, 'aux_classifier') and self.model.aux_classifier is not None:
+            self.model.aux_classifier[4] = nn.Conv2d(256, out_classes, kernel_size=1)
+    
+    def forward(self, x):
+        """
+        Forward pass through DeepLab v3.
+        
+        Args:
+            x: Input tensor of shape (batch_size, in_channels, H, W)
+            
+        Returns:
+            Output tensor of shape (batch_size, out_classes, H, W)
+        """
+        # DeepLab v3 returns a dictionary with 'out' key during training
+        # and 'aux' key if auxiliary classifier is present
+        output = self.model(x)
+        
+        # Extract the main output
+        if isinstance(output, dict):
+            return output['out']
+        return output
 
 class UNet(nn.Module):
     def __init__(self, in_channels=1, out_classes=2, up_sample_mode='conv_transpose'):
