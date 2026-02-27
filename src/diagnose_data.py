@@ -4,7 +4,7 @@ Quick diagnostic script to analyze class distribution and data quality.
 
 import torch
 import numpy as np
-from src.dataManager import get_training_data
+from src.data_manager import get_training_data
 from tqdm import tqdm
 
 

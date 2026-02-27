@@ -9,7 +9,7 @@ from tqdm import tqdm
 from torchmetrics import MetricCollection
 from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, BinaryRecall, BinaryF1Score
 
-from src.dataManager import get_training_data
+from src.data_manager import get_training_data
 from src.model import UNet, DeepLabV3, NestedUNet
 
 
