@@ -1,3 +1,4 @@
+import argparse
 import json
 import time
 from pathlib import Path
@@ -11,6 +12,20 @@ from src.data_manager import get_training_data
 from src.model import UNet, DeepLabV3, NestedUNet
 from torchmetrics import MetricCollection
 from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, BinaryRecall
+
+VALID_ARCHITECTURES = ('unet', 'deeplabv3', 'nestedunet')
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train brain tumor segmentation models.")
+    parser.add_argument(
+        '--model-arch',
+        type=str,
+        default='unet',
+        choices=VALID_ARCHITECTURES,
+        help="Model architecture to train (default: unet)",
+    )
+    return parser.parse_args()
 
 
 def calculate_pos_weight(data_loader, device, sample_batches=50):
@@ -67,11 +82,12 @@ def _write_logs(log_path: Path, records: list[dict]) -> None:
 
 
 def main():
+    args = parse_args()
+    model_arch = args.model_arch
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    
-    # Model architecture selection: 'unet' or 'deeplabv3' or 'nestedunet'
-    model_arch = 'unet'
+    print(f"Model architecture: {model_arch}")
     
     metric_names = ("iou", "precision", "recall")
     summary = []
@@ -102,7 +118,7 @@ def main():
         print(f"{'='*60}")
         
         # Load data first to calculate pos_weight
-        training_loader, validation_loader = get_training_data(val_split=0.2, orientation=orientation)
+        training_loader, validation_loader = get_training_data(orientation=orientation)
         
         pos_weight = calculate_pos_weight(training_loader, device, sample_batches=50)
         loss_function_oriented = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
