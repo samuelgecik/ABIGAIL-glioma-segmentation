@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import segmentation
 from src.unet_nested import NestedUNet
+from src.model3d import UNet3D
 
 class DeepLabV3(nn.Module):
     def __init__(self, in_channels=1, out_classes=1):
