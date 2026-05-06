@@ -13,6 +13,6 @@ def binarize_mask(mask_slice: np.ndarray) -> np.ndarray:
     """
     if mask_slice is None:
         raise ValueError("mask_slice cannot be None")
-    if mask_slice.ndim != 2:
-        raise ValueError(f"mask_slice must be 2D, got shape {mask_slice.shape}")
+    if mask_slice.ndim not in (2, 3):
+        raise ValueError(f"mask must be 2D or 3D, got shape {mask_slice.shape}")
     return (mask_slice != 0).astype(np.uint8)
