@@ -11,7 +11,7 @@ from src.dataset import BraTS2DDataset
 # Constants
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 TRAIN_DIR = os.path.join(REPO_ROOT, "training_data1_v2")
-CSV_PATH = os.path.join(REPO_ROOT, "validated_filtered.csv")
+CSV_PATH = os.path.join(REPO_ROOT, "dataset_splits.csv")
 
 
 def build_train_pairs(train_dir: str, df: pd.DataFrame) -> List[Tuple[str, str]]:
@@ -42,16 +42,7 @@ def main():
     # The CSV is semicolon-delimited based on repo file
     df = pd.read_csv(CSV_PATH, sep=";")
 
-    # Normalize column name (there is a trailing space in 'Train/Test/Validation ')
-    split_col = None
-    for c in df.columns:
-        if c.strip().lower() == "train/test/validation":
-            split_col = c
-            break
-    if split_col is None:
-        raise KeyError("Could not find 'Train/Test/Validation' column in CSV")
-
-    train_df = df[df[split_col].astype(str).str.strip().eq("Train")]
+    train_df = df[df["Split"] == "Train"]
 
     train_pairs = build_train_pairs(TRAIN_DIR, train_df)
     if not train_pairs:
