@@ -6,12 +6,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.dataset import BraTS2DDataset
+from src.dataset3d import BraTS3DDataset, RandomAugment3D
 
 
 # Constants
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-TRAIN_DIR = os.path.abspath("/home/sg624ew/glioma_data/filtered_dataset")  # Local SSD copy for faster I/O
-CSV_PATH = os.path.join(REPO_ROOT, "validated_filtered.csv")
+DATA_DIR = os.path.abspath("/home/sg624ew/glioma_data/filtered_dataset")  # Local SSD copy for faster I/O
+CSV_PATH = os.path.join(REPO_ROOT, "dataset_splits.csv")
 
 
 def _build_pairs(subject_ids, base_dir: str) -> List[Tuple[str, str]]:
@@ -33,46 +34,45 @@ def _build_pairs(subject_ids, base_dir: str) -> List[Tuple[str, str]]:
     return pairs
 
 
-def build_train_pairs(train_dir: str, df: pd.DataFrame) -> List[Tuple[str, str]]:
-    subject_ids = (row["BraTS Subject ID"] for _, row in df.iterrows())
-    return _build_pairs(subject_ids, train_dir)
-
-
-def get_training_data(val_split=0.2, orientation="axial", preload=True):
+def _load_splits() -> pd.DataFrame:
+    """Load the persistent split CSV and return the DataFrame."""
     if not os.path.exists(CSV_PATH):
-        raise FileNotFoundError(f"CSV not found at {CSV_PATH}")
-
-    # The CSV is semicolon-delimited based on repo file
+        raise FileNotFoundError(
+            f"Split CSV not found at {CSV_PATH}. "
+            "Run `python generate_splits.py` to create it."
+        )
     df = pd.read_csv(CSV_PATH, sep=";")
+    if "Split" not in df.columns:
+        raise KeyError("CSV is missing the 'Split' column. Regenerate with generate_splits.py.")
+    return df
 
-    # Normalize column name (there is a trailing space in 'Train/Test/Validation ')
-    split_col = None
-    for c in df.columns:
-        if c.strip().lower() == "train/test/validation":
-            split_col = c
-            break
-    if split_col is None:
-        raise KeyError("Could not find 'Train/Test/Validation' column in CSV")
 
-    train_df = df[df[split_col].astype(str).str.strip().eq("Train")]
+def _pairs_for_split(df: pd.DataFrame, split: str) -> List[Tuple[str, str]]:
+    """Return (image_path, seg_path) pairs for a given split name."""
+    subset = df[df["Split"] == split]
+    subject_ids = subset["BraTS Subject ID"].tolist()
+    pairs = _build_pairs(subject_ids, DATA_DIR)
+    if not pairs:
+        raise RuntimeError(
+            f"No pairs found for split '{split}'. "
+            f"Check that files exist in {DATA_DIR}."
+        )
+    return pairs
 
-    all_train_pairs = build_train_pairs(TRAIN_DIR, train_df)
-    if not all_train_pairs:
-        raise RuntimeError(f"No training pairs found. Check paths and filenames. {TRAIN_DIR}")
 
-    # Split at PATIENT level (not slice level)
-    import random
-    random.seed(42)  # For reproducibility
-    random.shuffle(all_train_pairs)  # Shuffle patients/volumes
-    
-    split_idx = int(len(all_train_pairs) * (1 - val_split))
-    train_pairs = all_train_pairs[:split_idx]
-    val_pairs = all_train_pairs[split_idx:]
+def get_training_data(orientation="axial", preload=True):
+    """Load 2D training and validation data from persistent splits.
 
-    # Now create datasets - each will expand volumes into slices
+    Returns (train_loader, val_loader).
+    """
+    df = _load_splits()
+
+    train_pairs = _pairs_for_split(df, "Train")
+    val_pairs = _pairs_for_split(df, "Val")
+
     train_dataset = BraTS2DDataset(train_pairs, orientation=orientation, preload=preload)
     val_dataset = BraTS2DDataset(val_pairs, orientation=orientation, preload=preload)
-    
+
     # Use num_workers=0 (main process only) since data is preloaded in RAM
     # Larger batch size to maximize GPU utilization with 24GB VRAM
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=0, pin_memory=True)
@@ -87,6 +87,62 @@ def get_training_data(val_split=0.2, orientation="axial", preload=True):
     print(f"Train volumes: {len(train_pairs)}, Validation volumes: {len(val_pairs)}")
     print(f"Train slices: {len(train_dataset)}, Validation slices: {len(val_dataset)}")
     return train_loader, val_loader
+
+
+def get_training_data_3d(preload=True, augment=True):
+    """Load 3D volumetric training and validation data from persistent splits.
+
+    Returns (train_loader, val_loader).
+    """
+    df = _load_splits()
+
+    train_pairs = _pairs_for_split(df, "Train")
+    val_pairs = _pairs_for_split(df, "Val")
+
+    transforms = RandomAugment3D() if augment else None
+    train_dataset = BraTS3DDataset(train_pairs, transforms=transforms, preload=preload)
+    val_dataset = BraTS3DDataset(val_pairs, transforms=None, preload=preload)
+
+    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=0, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True)
+
+    batch = next(iter(train_loader))
+    images, labels = batch
+    print("Batch images shape:", images.shape)  # [B,1,D,H,W]
+    print("Batch labels shape:", labels.shape)
+    print("Images dtype:", images.dtype, "Labels dtype:", labels.dtype)
+    print(f"Train volumes: {len(train_pairs)}, Validation volumes: {len(val_pairs)}")
+    return train_loader, val_loader
+
+
+def get_test_data(orientation="axial", preload=False):
+    """Load 2D test data from persistent splits.
+
+    Returns a single DataLoader for the held-out test set.
+    """
+    df = _load_splits()
+    test_pairs = _pairs_for_split(df, "Test")
+
+    test_dataset = BraTS2DDataset(test_pairs, orientation=orientation, preload=preload)
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=0, pin_memory=True)
+
+    print(f"Test volumes: {len(test_pairs)}, Test slices: {len(test_dataset)}")
+    return test_loader
+
+
+def get_test_data_3d(preload=False):
+    """Load 3D volumetric test data from persistent splits.
+
+    Returns a single DataLoader for the held-out test set.
+    """
+    df = _load_splits()
+    test_pairs = _pairs_for_split(df, "Test")
+
+    test_dataset = BraTS3DDataset(test_pairs, transforms=None, preload=preload)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True)
+
+    print(f"Test volumes: {len(test_pairs)}")
+    return test_loader
 
 
 if __name__ == "__main__":

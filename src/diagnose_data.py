@@ -15,7 +15,7 @@ def analyze_class_distribution(orientation="axial", num_batches=100):
     print(f"Data Analysis for {orientation.upper()} orientation")
     print(f"{'='*70}\n")
     
-    train_loader, val_loader = get_training_data(val_split=0.2, orientation=orientation)
+    train_loader, val_loader = get_training_data(orientation=orientation)
     
     # Training set analysis
     print("Analyzing TRAINING set...")
