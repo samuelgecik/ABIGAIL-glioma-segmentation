@@ -1,3 +1,4 @@
+import argparse
 import json
 import time
 from pathlib import Path
@@ -11,6 +12,20 @@ from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, Bin
 
 from src.data_manager import get_training_data
 from src.model import UNet, DeepLabV3, NestedUNet
+
+VALID_ARCHITECTURES = ('unet', 'deeplabv3', 'nestedunet')
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run validation inference on trained models.")
+    parser.add_argument(
+        '--model-arch',
+        type=str,
+        default='unet',
+        choices=VALID_ARCHITECTURES,
+        help="Model architecture to evaluate (default: unet)",
+    )
+    return parser.parse_args()
 
 
 def _prepare_batch(
@@ -101,30 +116,50 @@ def evaluate_model(
 
 
 def main():
+    args = parse_args()
+    model_arch = args.model_arch
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    
+    print(f"Model architecture: {model_arch}")
+
     # Directory containing saved models
     model_dir = Path("saved_models")
     if not model_dir.exists():
         raise FileNotFoundError(f"Model directory not found: {model_dir}")
-    
-    # Find the most recent timestamp for the three models
-    # Expected naming: best_{orientation}_{timestamp}.pt
-    model_files = list(model_dir.glob("best_*.pt"))
+
+    # Build glob pattern based on architecture.
+    # UNet files: best_{orientation}_{timestamp}.pt  (no arch prefix)
+    # Others:     best_{arch}_{orientation}_{timestamp}.pt
+    if model_arch == 'unet':
+        # Match unet files but exclude files that have a known arch prefix
+        glob_pattern = "best_*.pt"
+        arch_prefixes = tuple(f"best_{a}_" for a in VALID_ARCHITECTURES if a != 'unet')
+    else:
+        glob_pattern = f"best_{model_arch}_*.pt"
+        arch_prefixes = None  # no filtering needed
+
+    model_files = list(model_dir.glob(glob_pattern))
+    # For unet, exclude files belonging to other architectures
+    if arch_prefixes:
+        model_files = [f for f in model_files if not f.name.startswith(arch_prefixes)]
+
     if not model_files:
-        raise FileNotFoundError(f"No model files found in {model_dir}")
-    
-    # Group by timestamp to find the latest complete set
+        raise FileNotFoundError(f"No {model_arch} model files found in {model_dir}")
+
+    # Parse orientation and timestamp from filenames.
+    # UNet:   best_{orientation}_{timestamp}.pt  → prefix length 1 (skip 'best')
+    # Others: best_{arch}_{orientation}_{timestamp}.pt → prefix length 2 (skip 'best', arch)
     from collections import defaultdict
     timestamp_groups = defaultdict(list)
+    prefix_parts = 1 if model_arch == 'unet' else 2
     for model_file in model_files:
-        parts = model_file.stem.split("_")  # e.g., ['best', 'axial', '20251119-192024']
-        if len(parts) >= 3:
-            orientation = parts[1]
-            timestamp = "_".join(parts[2:])
+        parts = model_file.stem.split("_")
+        if len(parts) >= prefix_parts + 2:
+            orientation = parts[prefix_parts]
+            timestamp = "_".join(parts[prefix_parts + 1:])
             timestamp_groups[timestamp].append((orientation, model_file))
-    
+
     # Find the most recent complete set (all three orientations)
     latest_timestamp = None
     latest_models = None
@@ -134,9 +169,11 @@ def main():
             latest_timestamp = timestamp
             latest_models = {ori: path for ori, path in models}
             break
-    
+
     if latest_models is None:
-        raise FileNotFoundError("Could not find a complete set of models (axial, coronal, sagittal)")
+        raise FileNotFoundError(
+            f"Could not find a complete set of {model_arch} models (axial, coronal, sagittal)"
+        )
     
     print(f"\nFound complete model set with timestamp: {latest_timestamp}")
     print(f"Models:")
@@ -152,7 +189,7 @@ def main():
         print(f"{'='*60}")
         
         # Load validation data for this orientation (no preload needed for inference)
-        _, validation_loader = get_training_data(val_split=0.2, orientation=orientation, preload=False)
+        _, validation_loader = get_training_data(orientation=orientation, preload=False)
         
         # Load model
         model = load_model_checkpoint(latest_models[orientation], device)
