@@ -11,9 +11,7 @@ from torchmetrics import MetricCollection
 from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, BinaryRecall, BinaryF1Score
 
 from src.data_manager import get_training_data
-from src.model import UNet, DeepLabV3, NestedUNet
-
-VALID_ARCHITECTURES = ('unet', 'deeplabv3', 'nestedunet')
+from src.model import build_model, VALID_ARCHITECTURES
 
 
 def parse_args():
@@ -50,15 +48,10 @@ def load_model_checkpoint(checkpoint_path: Path, device: torch.device):
     
     # Determine model architecture (default to UNet for backwards compatibility)
     model_arch = checkpoint.get('model_arch', 'unet')
-    
+
     # Initialize the appropriate model
-    if model_arch == 'deeplabv3':
-        model = DeepLabV3(in_channels=1, out_classes=1).to(device)
-    elif model_arch == 'nestedunet':
-        model = NestedUNet(in_ch=1, out_ch=1).to(device)
-    else:
-        model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)
-    
+    model = build_model(model_arch, in_channels=1, out_classes=1).to(device)
+
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     

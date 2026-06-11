@@ -9,11 +9,10 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from src.data_manager import get_training_data
-from src.model import UNet, DeepLabV3, NestedUNet
+from src.model import build_model, VALID_ARCHITECTURES
+from src.losses import build_loss, VALID_LOSSES
 from torchmetrics import MetricCollection
 from torchmetrics.classification import BinaryJaccardIndex, BinaryPrecision, BinaryRecall
-
-VALID_ARCHITECTURES = ('unet', 'deeplabv3', 'nestedunet')
 
 
 def parse_args():
@@ -24,6 +23,32 @@ def parse_args():
         default='unet',
         choices=VALID_ARCHITECTURES,
         help="Model architecture to train (default: unet)",
+    )
+    parser.add_argument(
+        '--loss',
+        type=str,
+        default='bce',
+        choices=VALID_LOSSES,
+        help="Loss function: bce (weighted), dice, or bce_dice (default: bce)",
+    )
+    parser.add_argument(
+        '--pos-weight',
+        type=float,
+        default=None,
+        help="Override the BCE positive-class weight. If unset, it is auto-computed "
+             "from class frequency (~96 here). Ignored by pure Dice loss.",
+    )
+    parser.add_argument(
+        '--epochs',
+        type=int,
+        default=20,
+        help="Epochs per orientation (default: 20)",
+    )
+    parser.add_argument(
+        '--orientations',
+        type=str,
+        default='axial,coronal,sagittal',
+        help="Comma-separated orientations to train (default: all three)",
     )
     return parser.parse_args()
 
@@ -88,11 +113,16 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     print(f"Model architecture: {model_arch}")
-    
+    print(f"Loss: {args.loss}"
+          + (f" | pos_weight override: {args.pos_weight}" if args.pos_weight is not None else " | pos_weight: auto"))
+
+    orientations = [o.strip() for o in args.orientations.split(",") if o.strip()]
+    print(f"Orientations: {orientations} | Epochs: {args.epochs}")
+
     metric_names = ("iou", "precision", "recall")
     summary = []
-    epochs = 20
-    
+    epochs = args.epochs
+
     # Create directories for saving models and logs
     run_dir = Path("training_logs")
     run_dir.mkdir(exist_ok=True)
@@ -112,28 +142,30 @@ def main():
         return collection.to(device)
 
     log_records: list[dict] = []
-    for orientation in ("axial", "coronal", "sagittal"):
+    for orientation in orientations:
         print(f"\n{'='*60}")
         print(f"Training orientation: {orientation.upper()}")
         print(f"{'='*60}")
-        
+
         # Load data first to calculate pos_weight
         training_loader, validation_loader = get_training_data(orientation=orientation)
-        
-        pos_weight = calculate_pos_weight(training_loader, device, sample_batches=50)
-        loss_function_oriented = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-        
-        # Select model architecture
-        if model_arch == 'deeplabv3':
-            print(f"Training {orientation} orientation with DeepLab v3")
-            model = DeepLabV3(in_channels=1, out_classes=1).to(device)
-        elif model_arch == 'nestedunet':
-            print(f"Training {orientation} orientation with NestedUNet")
-            model = NestedUNet(in_ch=1, out_ch=1).to(device)
+
+        # Resolve the positive-class weight for the BCE term.
+        # Pure Dice ignores it; an explicit --pos-weight overrides the auto value.
+        if args.loss == "dice":
+            pos_weight = None
+        elif args.pos_weight is not None:
+            pos_weight = torch.tensor([args.pos_weight], device=device)
+            print(f"Using user-specified pos_weight={args.pos_weight}")
         else:
-            print(f"Training {orientation} orientation with UNet")
-            model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)
-        
+            pos_weight = calculate_pos_weight(training_loader, device, sample_batches=50)
+        loss_function_oriented = build_loss(args.loss, pos_weight=pos_weight)
+        pos_weight_value = float(pos_weight.item()) if pos_weight is not None else None
+
+        # Select model architecture
+        print(f"Training {orientation} orientation with {model_arch}")
+        model = build_model(model_arch, in_channels=1, out_classes=1).to(device)
+
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
         
         # ReduceLROnPlateau will lower LR when validation loss plateaus
@@ -243,6 +275,8 @@ def main():
                     'val_iou': current_val_iou,
                     'val_metrics': epoch_val_metrics,
                     'model_arch': model_arch,
+                    'loss': args.loss,
+                    'pos_weight': pos_weight_value,
                 }, model_path)
                 print(f"  → Saved best model for {orientation} (IoU: {current_val_iou:.4f}) to {model_path}")
 

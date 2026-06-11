@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from src.model import UNet, DeepLabV3, NestedUNet
+from src.model import build_model
 
 
 def load_and_prepare_volume(
@@ -159,14 +159,9 @@ def predict_single_case(
     # Load model with architecture detection
     checkpoint = torch.load(model_path, map_location=device)
     model_arch = checkpoint.get('model_arch', 'unet')
-    
-    if model_arch == 'deeplabv3':
-        model = DeepLabV3(in_channels=1, out_classes=1).to(device)
-    elif model_arch == 'nestedunet':
-        model = NestedUNet(in_ch=1, out_ch=1).to(device)
-    else:
-        model = UNet(in_channels=1, out_classes=1, up_sample_mode='conv_transpose').to(device)
-    
+
+    model = build_model(model_arch, in_channels=1, out_classes=1).to(device)
+
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     
