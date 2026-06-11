@@ -1,0 +1,46 @@
+{
+  "model_arch": "unet",
+  "model_timestamp": "20251119-192024",
+  "split": "Test",
+  "primary_threshold": 0.5,
+  "swept": true,
+  "best_threshold_by_dice": 0.98,
+  "num_cases": 172,
+  "num_skipped": 0,
+  "skipped_ids": [],
+  "metric_type": "volumetric_per_case_mean",
+  "per_axis": {
+    "axial": {
+      "dice": 0.8820890501579265,
+      "iou": 0.7947166160284511,
+      "precision": 0.8047808635810454,
+      "recall": 0.9869051658262357
+    },
+    "coronal": {
+      "dice": 0.9021340069711755,
+      "iou": 0.826016753358487,
+      "precision": 0.8362568923563518,
+      "recall": 0.9875945756724687
+    },
+    "sagittal": {
+      "dice": 0.88225782434569,
+      "iou": 0.7953644693498023,
+      "precision": 0.8069080050560583,
+      "recall": 0.984653407173758
+    }
+  },
+  "ensemble_by_threshold": {
+    "0.50": {
+      "dice": 0.8965185734193971,
+      "iou": 0.8179266025912267,
+      "precision": 0.8279547166095361,
+      "recall": 0.9883978228897687
+    },
+    "0.98": {
+      "dice": 0.9475983185124123,
+      "iou": 0.9071397914268778,
+      "precision": 0.953387477509136,
+      "recall": 0.9501668271859021
+    }
+  }
+}

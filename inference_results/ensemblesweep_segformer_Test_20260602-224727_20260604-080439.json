@@ -1,0 +1,46 @@
+{
+  "model_arch": "segformer",
+  "model_timestamp": "20260602-224727",
+  "split": "Test",
+  "primary_threshold": 0.5,
+  "swept": true,
+  "best_threshold_by_dice": 0.65,
+  "num_cases": 172,
+  "num_skipped": 0,
+  "skipped_ids": [],
+  "metric_type": "volumetric_per_case_mean",
+  "per_axis": {
+    "axial": {
+      "dice": 0.8404332315903088,
+      "iou": 0.7334547925727537,
+      "precision": 0.7699129277487358,
+      "recall": 0.943556529201544
+    },
+    "coronal": {
+      "dice": 0.8448858805015025,
+      "iou": 0.7398009845953316,
+      "precision": 0.7768976291274784,
+      "recall": 0.9439348547033005
+    },
+    "sagittal": {
+      "dice": 0.8389843706006602,
+      "iou": 0.7306357225511659,
+      "precision": 0.7657414184483301,
+      "recall": 0.9450034854268196
+    }
+  },
+  "ensemble_by_threshold": {
+    "0.50": {
+      "dice": 0.8594180224875435,
+      "iou": 0.7621958804221173,
+      "precision": 0.7946722824413908,
+      "recall": 0.9552500393703669
+    },
+    "0.65": {
+      "dice": 0.8769143743548732,
+      "iou": 0.790455197979467,
+      "precision": 0.8392901306586663,
+      "recall": 0.9375843734865956
+    }
+  }
+}

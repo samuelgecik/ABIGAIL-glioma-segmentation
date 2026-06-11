@@ -1,0 +1,36 @@
+{
+  "model_arch": "segformer",
+  "model_timestamp": "20260602-224727",
+  "split": "Val",
+  "threshold": 0.5,
+  "num_cases": 172,
+  "num_skipped": 0,
+  "skipped_ids": [],
+  "metric_type": "volumetric_per_case_mean",
+  "per_axis": {
+    "axial": {
+      "dice": 0.85018546759398,
+      "iou": 0.7448767198217837,
+      "precision": 0.7747689827559748,
+      "recall": 0.9524278350088063
+    },
+    "coronal": {
+      "dice": 0.8480072219944192,
+      "iou": 0.7419348612713533,
+      "precision": 0.7766473087125567,
+      "recall": 0.9456931949928503
+    },
+    "sagittal": {
+      "dice": 0.8432037383048844,
+      "iou": 0.7353574165365788,
+      "precision": 0.7682682350117669,
+      "recall": 0.9463892480698554
+    }
+  },
+  "ensemble": {
+    "dice": 0.8667571089178399,
+    "iou": 0.769563881702653,
+    "precision": 0.796223422585906,
+    "recall": 0.9611166453114177
+  }
+}

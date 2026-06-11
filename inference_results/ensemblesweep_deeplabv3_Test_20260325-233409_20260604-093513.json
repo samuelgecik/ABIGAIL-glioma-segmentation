@@ -1,0 +1,46 @@
+{
+  "model_arch": "deeplabv3",
+  "model_timestamp": "20260325-233409",
+  "split": "Test",
+  "primary_threshold": 0.5,
+  "swept": true,
+  "best_threshold_by_dice": 0.96,
+  "num_cases": 172,
+  "num_skipped": 0,
+  "skipped_ids": [],
+  "metric_type": "volumetric_per_case_mean",
+  "per_axis": {
+    "axial": {
+      "dice": 0.8588314818653129,
+      "iou": 0.7582991566191667,
+      "precision": 0.766997790560414,
+      "recall": 0.9866055789172525
+    },
+    "coronal": {
+      "dice": 0.8575431019047173,
+      "iou": 0.7555758994979965,
+      "precision": 0.764892818528622,
+      "recall": 0.9876296619628806
+    },
+    "sagittal": {
+      "dice": 0.8632814718778511,
+      "iou": 0.7632943813237627,
+      "precision": 0.7723335178928574,
+      "recall": 0.9874558133244492
+    }
+  },
+  "ensemble_by_threshold": {
+    "0.50": {
+      "dice": 0.8657116827144857,
+      "iou": 0.768456112804397,
+      "precision": 0.7775382255532869,
+      "recall": 0.9888659667408283
+    },
+    "0.96": {
+      "dice": 0.9392834989069538,
+      "iou": 0.8920077709097424,
+      "precision": 0.9295433765337776,
+      "recall": 0.9579250424709878
+    }
+  }
+}
